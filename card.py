@@ -1,38 +1,56 @@
-from enum import Enum
+from enum import Enum, auto
+
 
 class Color(Enum):
     RED = "RED"
-    YELLOW = "YELLOW"
-    GREEN = "GREEN"
     BLUE = "BLUE"
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
     WILD = "WILD"
+
 
 class CardType(Enum):
-    NUMBER = "NUMBER"
-    SKIP = "SKIP"
-    REVERSE = "REVERSE"
-    DRAW_TWO = "DRAW_TWO"
-    WILD = "WILD"
-    WILD_DRAW_FOUR = "WILD_DRAW_FOUR"
+    NUMBER = auto()
+    SKIP = auto()
+    REVERSE = auto()
+    DRAW_TWO = auto()
+    WILD = auto()
+
 
 class Card:
-    def __init__(self, color, ctype, value=None):
+    def __init__(self, color: Color, type_: CardType, value=None):
         self.color = color
-        self.type = ctype
-        self.value = value
+        self.type = type_
+        self.value = value  # 숫자 카드일 때만 사용
 
-    def playable(self, top, current_color):
+    def is_playable(self, top_card, current_color):
+        # 색이 같으면 가능
+        if self.color == current_color:
+            return True
+
+        # 숫자/기호가 같으면 가능
+        if self.type == top_card.type and self.value == top_card.value:
+            return True
+
+        # 와일드는 항상 가능
         if self.color == Color.WILD:
             return True
-        return (
-            self.color == current_color or
-            self.type == top.type or
-            self.value == top.value
-        )
 
-    def serialize(self):
-        return {
-            "color": self.color.value,
-            "type": self.type.value,
-            "value": self.value
-        }
+        return False
+
+    def image_name(self):
+        """
+        텍스처 파일명 반환
+        """
+        if self.color == Color.WILD:
+            return "WILD.png"
+
+        if self.type == CardType.NUMBER:
+            return f"{self.color.value}_{self.value}.png"
+
+        return f"{self.color.value}_{self.type.name}.png"
+
+    def __repr__(self):
+        if self.type == CardType.NUMBER:
+            return f"{self.color.value} {self.value}"
+        return f"{self.color.value} {self.type.name}"
