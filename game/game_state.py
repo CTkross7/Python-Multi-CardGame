@@ -1,5 +1,8 @@
+import time
 from .deck import Deck
 from .card import Color, CardType
+
+TURN_LIMIT = 20  # 초
 
 class GameState:
     def __init__(self, players):
@@ -9,6 +12,7 @@ class GameState:
         self.turn = 0
         self.direction = 1
         self.current_color = None
+        self.turn_start = time.time()
 
     def start(self):
         for p in self.players:
@@ -17,28 +21,20 @@ class GameState:
         first = self.deck.draw()
         self.discard.append(first)
         self.current_color = first.color
+        self.turn_start = time.time()
 
     def next_turn(self):
         self.turn = (self.turn + self.direction) % len(self.players)
+        self.turn_start = time.time()
+
+    def is_timeout(self):
+        return time.time() - self.turn_start > TURN_LIMIT
 
     def play_card(self, player, idx):
         card = player.hand[idx]
         if not card.playable(self.discard[-1], self.current_color):
             return False
-
         player.hand.pop(idx)
         self.discard.append(card)
-
-        self.current_color = (
-            player.choose_color() if card.color == Color.WILD else card.color
-        )
-
-        if card.type == CardType.REVERSE:
-            self.direction *= -1
-        elif card.type == CardType.SKIP:
-            self.next_turn()
-        elif card.type == CardType.DRAW_TWO:
-            self.next_turn()
-            self.players[self.turn].hand += [self.deck.draw(), self.deck.draw()]
-
+        self.current_color = card.color if card.color != Color.WILD else player.choose_color()
         return True
