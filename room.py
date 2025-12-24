@@ -163,9 +163,9 @@ class Room:
                 return
 
         # ----- 패스 -----
-        elif cmd == "PASS" or cmd == "pass":
+        elif cmd == "PASS":
             self.game.next_turn()
 
         # ----- UNO 선언 -----
-        elif cmd == "UNO" or cmd == "uno":
+        elif cmd == "UNO":
             player.said_uno = True

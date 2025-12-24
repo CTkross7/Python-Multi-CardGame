@@ -2,7 +2,7 @@ import time
 from .deck import Deck
 from .card import Color, CardType
 
-TURN_LIMIT = 20  # 초
+TURN_LIMIT = 20
 
 class GameState:
     def __init__(self, players):
@@ -18,6 +18,7 @@ class GameState:
         for p in self.players:
             for _ in range(7):
                 p.hand.append(self.deck.draw())
+
         first = self.deck.draw()
         self.discard.append(first)
         self.current_color = first.color
@@ -27,14 +28,20 @@ class GameState:
         self.turn = (self.turn + self.direction) % len(self.players)
         self.turn_start = time.time()
 
-    def is_timeout(self):
-        return time.time() - self.turn_start > TURN_LIMIT
-
     def play_card(self, player, idx):
+        if idx < 0 or idx >= len(player.hand):
+            return False
+
         card = player.hand[idx]
         if not card.playable(self.discard[-1], self.current_color):
             return False
+
         player.hand.pop(idx)
         self.discard.append(card)
-        self.current_color = card.color if card.color != Color.WILD else player.choose_color()
+
+        if card.color == Color.WILD:
+            self.current_color = player.choose_color()
+        else:
+            self.current_color = card.color
+
         return True
