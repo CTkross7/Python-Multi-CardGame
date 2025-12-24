@@ -1,103 +1,96 @@
+import cv2
+import numpy as np
 from PIL import Image
 import os
 
-# ======================
+# =========================
 # 설정
-# ======================
-IMAGE_PATH = "uno_cards.png"   # 입력 이미지
+# =========================
+IMAGE_PATH = "uno_cards.png"
 OUTPUT_DIR = "output"
-
-COLS = 16   # 가로 카드 수
-ROWS = 4    # 세로 카드 수
-
-# 카드 순서 정의 (이미지의 실제 배치 순서 기준)
-CARD_ORDER = [
-    # 1행 (와일드 + 노랑)
-    ("WILD", "BACK"),
-    ("WILD", "WILD"),
-    ("WILD", "WILD"),
-    ("WILD", "WILD"),
-    ("WILD", "WILD"),
-    ("WILD", "WILD"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "WILD_DRAW_FOUR"),
-    ("WILD", "BACK"),
-
-    ("YELLOW", "1"), ("YELLOW", "2"), ("YELLOW", "3"),
-
-    # 2행 (노랑 + 빨강)
-    ("YELLOW", "4"), ("YELLOW", "5"), ("YELLOW", "6"),
-    ("YELLOW", "7"), ("YELLOW", "8"), ("YELLOW", "9"),
-    ("YELLOW", "0"), ("YELLOW", "DRAW_TWO"), ("YELLOW", "SKIP"),
-
-    ("RED", "REVERSE"),
-    ("RED", "1"), ("RED", "2"), ("RED", "3"),
-
-    # 3행 (빨강 + 파랑)
-    ("RED", "4"), ("RED", "5"), ("RED", "6"),
-    ("RED", "7"), ("RED", "8"), ("RED", "9"),
-    ("RED", "0"), ("RED", "DRAW_TWO"), ("RED", "SKIP"),
-
-    ("BLUE", "REVERSE"),
-    ("BLUE", "1"), ("BLUE", "2"), ("BLUE", "3"),
-
-    # 4행 (파랑 + 초록)
-    ("BLUE", "4"), ("BLUE", "5"), ("BLUE", "6"),
-    ("BLUE", "7"), ("BLUE", "8"), ("BLUE", "9"),
-    ("BLUE", "0"), ("BLUE", "DRAW_TWO"), ("BLUE", "SKIP"),
-
-    ("GREEN", "REVERSE"),
-    ("GREEN", "1"), ("GREEN", "2"), ("GREEN", "3"),
-    ("GREEN", "4"), ("GREEN", "5"), ("GREEN", "6"),
-    ("GREEN", "7"), ("GREEN", "8"), ("GREEN", "9"),
-    ("GREEN", "0"), ("GREEN", "DRAW_TWO"), ("GREEN", "SKIP"),
-]
-
-# ======================
-# 실행
-# ======================
-img = Image.open(IMAGE_PATH)
-w, h = img.size
-
-card_w = w // COLS
-card_h = h // ROWS
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-index = 0
+# 카드 순서 (좌→우, 상→하 기준)
+CARD_ORDER = [
+    # Wild / Back
+    ("WILD", "BACK"),
+    ("WILD", "WILD"), ("WILD", "WILD"), ("WILD", "WILD"),
+    ("WILD", "WILD"), ("WILD", "WILD"),
+    ("WILD", "WILD_DRAW_FOUR"), ("WILD", "WILD_DRAW_FOUR"),
+    ("WILD", "WILD_DRAW_FOUR"), ("WILD", "WILD_DRAW_FOUR"),
+    ("WILD", "WILD_DRAW_FOUR"), ("WILD", "WILD_DRAW_FOUR"),
+    ("WILD", "BACK"),
 
-for row in range(ROWS):
-    for col in range(COLS):
-        if index >= len(CARD_ORDER):
-            break
+    # Yellow
+    *[("YELLOW", str(i)) for i in [1,2,3,4,5,6,7,8,9,0]],
+    ("YELLOW", "DRAW_TWO"), ("YELLOW", "SKIP"), ("YELLOW", "REVERSE"),
 
-        color, name = CARD_ORDER[index]
-        index += 1
+    # Red
+    *[("RED", str(i)) for i in [1,2,3,4,5,6,7,8,9,0]],
+    ("RED", "DRAW_TWO"), ("RED", "SKIP"), ("RED", "REVERSE"),
 
-        # BACK 카드 제외 (선택)
-        if name == "BACK":
-            continue
+    # Blue
+    *[("BLUE", str(i)) for i in [1,2,3,4,5,6,7,8,9,0]],
+    ("BLUE", "DRAW_TWO"), ("BLUE", "SKIP"), ("BLUE", "REVERSE"),
 
-        # 폴더 생성
-        folder = os.path.join(OUTPUT_DIR, color)
-        os.makedirs(folder, exist_ok=True)
+    # Green
+    *[("GREEN", str(i)) for i in [1,2,3,4,5,6,7,8,9,0]],
+    ("GREEN", "DRAW_TWO"), ("GREEN", "SKIP"), ("GREEN", "REVERSE"),
+]
 
-        # 카드 자르기
-        x1 = col * card_w
-        y1 = row * card_h
-        x2 = x1 + card_w
-        y2 = y1 + card_h
+# =========================
+# 이미지 로드
+# =========================
+img = cv2.imread(IMAGE_PATH)
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        card_img = img.crop((x1, y1, x2, y2))
+# 흰 테두리 기준 이진화
+_, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
 
-        filename = f"{color}_{name}.png"
-        path = os.path.join(folder, filename)
+# 컨투어 검출
+contours, _ = cv2.findContours(
+    thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+)
 
-        card_img.save(path)
-        print(f"Saved: {path}")
+# 카드 후보만 필터링
+cards = []
+for cnt in contours:
+    x, y, w, h = cv2.boundingRect(cnt)
+    area = w * h
 
-print("✅ 모든 카드 추출 완료")
+    # 카드 크기 범위 필터 (이미지에 맞춰 자동 안정화)
+    if area > 20000 and h > w:
+        cards.append((x, y, w, h))
+
+# 좌→우, 상→하 정렬
+cards.sort(key=lambda b: (b[1] // 100, b[0]))
+
+print(f"Detected cards: {len(cards)}")
+
+# =========================
+# 카드 저장
+# =========================
+for i, (x, y, w, h) in enumerate(cards):
+    if i >= len(CARD_ORDER):
+        break
+
+    color, name = CARD_ORDER[i]
+
+    if name == "BACK":
+        continue
+
+    folder = os.path.join(OUTPUT_DIR, color)
+    os.makedirs(folder, exist_ok=True)
+
+    card_img = img[y:y+h, x:x+w]
+    card_img = cv2.cvtColor(card_img, cv2.COLOR_BGR2RGB)
+
+    pil_img = Image.fromarray(card_img)
+
+    path = os.path.join(folder, f"{color}_{name}.png")
+    pil_img.save(path)  # ✅ 자동 덮어쓰기
+
+    print(f"Saved: {path}")
+
+print("✅ 카드 자동 추출 완료")
