@@ -1,5 +1,5 @@
-from deck import Deck
-from card import Color, CardType
+from .deck import Deck
+from .card import Color, CardType
 
 class GameState:
     def __init__(self, players):
@@ -18,11 +18,8 @@ class GameState:
         self.discard.append(first)
         self.current_color = first.color
 
-    def next_index(self, step=1):
-        return (self.turn + step * self.direction) % len(self.players)
-
     def next_turn(self):
-        self.turn = self.next_index()
+        self.turn = (self.turn + self.direction) % len(self.players)
 
     def play_card(self, player, idx):
         card = player.hand[idx]
@@ -43,21 +40,5 @@ class GameState:
         elif card.type == CardType.DRAW_TWO:
             self.next_turn()
             self.players[self.turn].hand += [self.deck.draw(), self.deck.draw()]
-        elif card.type == CardType.WILD_DRAW_FOUR:
-            self.next_turn()
-            for _ in range(4):
-                self.players[self.turn].hand.append(self.deck.draw())
 
         return True
-
-    def ai_turn(self):
-        player = self.players[self.turn]
-        idx = player.ai_think(self)
-
-        if idx is None:
-            player.hand.append(self.deck.draw())
-            return f"{player.name} draws"
-
-        card = player.hand[idx]
-        self.play_card(player, idx)
-        return f"{player.name} plays {card.color.value} {card.type.value}"
