@@ -1,113 +1,154 @@
 import socket
+import sys
 from protocol import encode, decode
 from ui.console_ui import ConsoleUI as UI
 from ui.console_ui import Color
+import time
 
 sock = socket.socket()
-sock.connect(("127.0.0.1", 9009))
+try:
+    sock.connect(("127.0.0.1", 9009))
+except ConnectionRefusedError:
+    print("서버에 연결할 수 없습니다.")
+    sys.exit()
 
-player_name = "Player0"  # 현재 클라이언트 기준
-room_code = None         # ⭐ 방 코드 저장용
+# 초기값은 None, 서버가 정해줄 때까지 대기
+player_name = None 
+room_code = None
+msg_buffer = bytearray()
+
+def recv_packet(conn):
+    global msg_buffer
+    while b"\n" not in msg_buffer:
+        try:
+            chunk = conn.recv(4096)
+            if not chunk:
+                return None
+            msg_buffer.extend(chunk)
+        except OSError:
+            return None
+
+    line, _, rest = msg_buffer.partition(b"\n")
+    msg_buffer.clear()
+    msg_buffer.extend(rest)
+    return decode(line)
 
 # ===== 로비 =====
 while True:
     UI.clear()
-    UI.banner("UNO 콘솔 게임 | DEV: CTkross")
+    UI.banner("UNO Network Game")
+    
+    # 메뉴 표시를 위해 서버가 주는 패킷 대기 (MENU or WAIT or ...)
+    # 첫 연결 시 MENU 패킷이 옴
+    pass 
+    
+    # 여기서 recv를 바로 하면 화면 갱신 전에 블로킹되므로, 
+    # 흐름상 서버가 MENU를 보내주길 기대함.
+    # 하지만 server.py 구조상 클라이언트가 접속하면 바로 루프로 들어가서 MENU를 보냄.
+    
+    msg = recv_packet(sock)
+    if not msg:
+        sys.exit()
 
-    decode(sock.recv(1024))  # MENU 수신
-    choice = input("1. 방 생성 | 2. 방 참가 : ")
-
-    # ----- 방 생성 -----
-    if choice == "1":
-        max_p = input("인원 수 (2~4): ")
-        pw = input("비밀번호 (없으면 Enter): ")
-
-        sock.sendall(encode({
-            "choice": "1",
-            "max": max_p,
-            "password": pw or None
-        }))
-
-        # 🔥 방 코드 수신
-        resp = decode(sock.recv(1024))
-        if resp["type"] == "INFO":
-            room_code = resp["msg"].split(": ")[-1]
-
-            UI.clear()
-            UI.banner("방 생성 완료")
-            UI.info(f"방 코드: [{room_code}]")
-            UI.info("친구에게 이 코드를 공유하세요")
-            input("\nEnter를 누르면 대기실로 이동합니다...")
-        break
-
-    # ----- 방 참가 -----
-    elif choice == "2":
-        room_code = input("방 코드: ").strip().upper()
-        pw = input("비밀번호: ")
-
-        sock.sendall(encode({
-            "choice": "2",
-            "code": room_code,
-            "password": pw or None
-        }))
-
-        resp = decode(sock.recv(1024))
-        if resp["type"] == "ERROR":
-            UI.error(resp["msg"])
-            input("계속하려면 Enter")
-            continue
-        break
-
+    if msg.get("type") == "MENU":
+        choice = input("1. 방 생성 | 2. 방 참가 : ")
+        if choice == "1":
+            max_p = input("인원 수 (2~4): ")
+            pw = input("비밀번호 (Enter로 생략): ")
+            sock.sendall(encode({"choice": "1", "max": max_p, "password": pw or None}))
+            
+            resp = recv_packet(sock)
+            if resp["type"] == "INFO":
+                room_code = resp["msg"].split(": ")[-1]
+                print(f"방 생성됨: {room_code}")
+                # 대기 상태로 진입
+                break
+                
+        elif choice == "2":
+            code = input("방 코드: ").upper()
+            pw = input("비밀번호: ")
+            sock.sendall(encode({"choice": "2", "code": code, "password": pw or None}))
+            
+            resp = recv_packet(sock)
+            if resp.get("type") == "ERROR":
+                print(resp["msg"])
+                input("엔터 키를 눌러 다시 시도...")
+                continue
+            # 성공하면 루프 탈출
+            break
 
 # ===== 게임 루프 =====
 while True:
     UI.clear()
-    msg = decode(sock.recv(4096))
+    
+    msg = recv_packet(sock)
+    if not msg:
+        print("서버 연결 끊김")
+        break
 
-    # ----- 대기 화면 -----
+    # 1. 대기 화면
     if msg["type"] == "WAIT":
         UI.banner("대기 중")
         if room_code:
-            UI.info(f"방 코드: [{room_code}]")
-        UI.info(f"{msg['count']} / {msg['max']} 명 대기 중")
+            UI.info(f"방 코드: {room_code}")
+        UI.info(f"접속 인원: {msg['count']} / {msg['max']}")
         continue
 
-    # ----- 게임 상태 -----
-    if msg["type"] == "STATE":
-        UI.banner("UNO GAME")
+    # 2. 게임 시작 (내 이름 할당)
+    elif msg["type"] == "GAME_START":
+        player_name = msg["my_name"]
+        UI.clear()
+        UI.banner("게임 시작!")
+        UI.info(f"당신의 이름은 [{player_name}] 입니다.")
+        time.sleep(2)
+        continue
 
-        # 방 코드 상시 표시
-        if room_code:
-            UI.info(f"방 코드: [{room_code}]")
+    # 3. 게임 상태 업데이트
+    elif msg["type"] == "STATE":
+        UI.banner(f"UNO - {player_name}")
+        UI.info(f"현재 턴: {msg['turn']}")
+        
+        # 내 턴 여부 확인
+        is_my_turn = (msg["turn"] == player_name)
+        
+        UI.highlight_turn(msg["turn"], is_my_turn)
+        
+        # 바닥 카드
+        UI.section("바닥 카드")
+        print("   " + UI.card(msg["top"]))
 
-        # 턴 강조
-        UI.highlight_turn(msg["turn"], msg["turn"] == player_name)
+        # 다른 플레이어 정보
+        UI.section("플레이어 현황")
+        for p_name, cnt in msg["counts"].items():
+            marker = "👈 (나)" if p_name == player_name else ""
+            print(f"   {p_name}: 카드 {cnt}장 {marker}")
 
-        # 상태 영역
-        UI.section("게임 상태")
-        print("바닥 카드:", UI.card(msg["top"]))
-
-        # 상대 정보
-        UI.section("상대 상태")
-        for name, cnt in msg["counts"].items():
-            if name != player_name:
-                print(f"{name}: 카드 {cnt}장")
-
-        # 내 카드
-        UI.section("내 카드")
+        # 내 패 (번호와 함께 출력)
+        UI.section("나의 패")
         UI.grid(
             list(enumerate(msg["hand"])),
-            lambda x: f"[{x[0]}]{UI.card(x[1])}"
+            lambda x: f"[{x[0]}] {UI.card(x[1])}"
         )
+        
+        # 턴 진행 시간 바
+        UI.timer_bar(msg["turn_left"], msg["turn_time"])
 
-        # UNO 경고
-        if len(msg["hand"]) == 1:
-            UI.blink("🔥 UNO! 입력 안 하면 패널티! 🔥", Color.RED)
-
-        # 입력 처리
-        if msg["turn"] == player_name:
-            cmd = input("\n낼 카드 번호 (p: 패스 / u: UNO): ").strip()
+        # 입력 처리 (내 턴일 때만)
+        if is_my_turn:
+            print("\n[행동] 숫자:카드내기 / p:카드먹기(패스) / u:우노")
+            cmd = input("입력 > ").strip().lower()
+            
             if cmd == "u":
                 sock.sendall(encode({"cmd": "UNO"}))
-            elif cmd != "p":
+            elif cmd == "p":
+                sock.sendall(encode({"cmd": "PASS"}))
+            elif cmd.isdigit():
                 sock.sendall(encode({"cmd": f"PLAY {cmd}"}))
+        else:
+            print("\n상대방의 턴을 기다리는 중...")
+            # 화면 깜빡임 방지를 위해 약간 대기 (필수는 아님)
+            time.sleep(0.5)
+
+    elif msg["type"] == "ERROR":
+        UI.error(msg["msg"])
+        time.sleep(1)
