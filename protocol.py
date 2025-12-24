@@ -1,4 +1,3 @@
-# protocol.py
 import json
 
 def encode(data: dict) -> bytes:

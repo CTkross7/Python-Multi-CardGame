@@ -1,4 +1,3 @@
-# deck.py
 import random
 from card import Card, Color, CardType
 

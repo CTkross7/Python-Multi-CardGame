@@ -1,4 +1,3 @@
-# ui.py
 class UI:
     COLORS = {
         "RED": "\033[91m",

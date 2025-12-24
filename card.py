@@ -1,4 +1,3 @@
-# card.py
 from enum import Enum
 
 class Color(Enum):
@@ -31,21 +30,9 @@ class Card:
             self.value == top.value
         )
 
-    # ✅ 이 함수가 누락되어 있었음
     def serialize(self):
         return {
             "color": self.color.value,
             "type": self.type.value,
             "value": self.value
         }
-
-    @staticmethod
-    def deserialize(data):
-        return Card(
-            Color(data["color"]),
-            CardType(data["type"]),
-            data["value"]
-        )
-
-    def __str__(self):
-        return f"{self.color.value} {self.type.value} {self.value}"
