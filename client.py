@@ -1,6 +1,7 @@
 # client.py
 import socket
 from protocol import decode
+from ui import UI
 
 HOST = "127.0.0.1"
 PORT = 9009
@@ -28,10 +29,12 @@ while True:
         msg = decode(raw)
 
         if msg["type"] == "STATE":
-            print("\nCurrent Turn:", msg["turn"])
-            print("Top Card:", msg["top"])
-            print("Current Color:", msg["color"])
+            UI.banner("GAME STATE")
+            print("Turn:", msg["turn"])
+            print("Top:", UI.card(msg["top"]))
+            print("Color:", msg["color"])
             print("Players:", msg["counts"])
+
 
             if msg["turn"] == "Player0":
                 cmd = input("Play card index or pass (p): ")

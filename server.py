@@ -3,6 +3,8 @@ import socket, threading
 from protocol import encode
 from player import Player
 from game_state import GameState
+from ui import UI
+
 
 HOST = "127.0.0.1"
 PORT = 9009
@@ -55,7 +57,11 @@ def main():
         })
 
         if p.is_ai:
+            UI.banner(p.name + " THINKING")
+            event = game.ai_turn()
+            UI.event(event)
             game.next_turn()
+            
         else:
             msg = p.conn.recv(1024)
             data = msg.decode().strip().split(",")

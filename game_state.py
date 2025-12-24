@@ -48,5 +48,18 @@ class GameState:
             self.next_turn()
             for _ in range(4):
                 self.players[self.turn].hand.append(self.deck.draw())
+                
+    # game_state.py (추가 메서드)
+    def ai_turn(self):
+        player = self.players[self.turn]
+        idx = player.ai_think(self)
+
+        if idx is None:
+            player.hand.append(self.deck.draw())
+            return f"{player.name} draws a card"
+
+        card = player.hand[idx]
+        self.play_card(player, idx)
+        return f"{player.name} plays {card.color.value} {card.type.value}"
 
         return True
