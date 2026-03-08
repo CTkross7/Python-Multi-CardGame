@@ -9,51 +9,14 @@ System Architecture
 
 본 프로젝트는 Client-Server 아키텍처로 구성됩니다.
 
-+------------------+
-                        |      Client      |
-                        |   (Player #1)    |
-                        +---------+--------+
-                                  |
-                                  | TCP
-                                  |
-                        +---------v--------+
-                        |    Game Server   |
-                        |   <SERVER_IP>    |
-                        +---------+--------+
-                                  |
-               +------------------+------------------+
-               |                  |                  |
-        +------v------+    +------v------+    +------v------+
-        |    Room A   |    |    Room B   |    |    Room C   |
-        |  GameLoop   |    |  GameLoop   |    |  GameLoop   |
-        +-------------+    +-------------+    +-------------+
-
 서버는 여러 개의 Room 인스턴스를 관리하며 각 방은 독립적인 게임 루프를 실행합니다.
 
-
 ---
-
 Network Architecture
 
 본 시스템은 TCP + UDP 혼합 통신 구조를 사용합니다.
 
-UDP Discovery
- Client  -------------------->  Broadcast
-                                     |
-                                     v
-                           +-------------------+
-                           |    Game Server    |
-                           |   <SERVER_IP>     |
-                           +---------+---------+
-                                     |
-                                     | TCP
-                                     |
-                              Game Communication
-
-
 ---
-
-Server Discovery Protocol
 
 클라이언트는 서버를 자동으로 찾기 위해 UDP 브로드캐스트를 사용합니다.
 
@@ -71,11 +34,6 @@ Server → Client
 
 TCP  : 9009  (Game Communication)
 UDP  : 9010  (Server Discovery)
-
-
----
-
-Game Server Internal Structure
 
 서버 내부 구조
 
