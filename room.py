@@ -23,6 +23,8 @@ class Room:
         self.lock = threading.Lock()
         self.log = []
 
+        self._pid_counter = 0
+
         # 턴 제한 시간 (초)
         self.turn_time = 15
         self.turn_start = None
@@ -30,6 +32,16 @@ class Room:
     # =========================
     # 유틸
     # =========================
+
+    def issue_pid(self) -> int:
+        """
+        플레이어가 퇴장 후 재입장해도 ID가 중복되지 않도록
+        단조 증가(Monotonic Increasing) ID를 안전하게 발급합니다.
+        """
+        with self.lock:
+            self._pid_counter += 1
+            return self._pid_counter
+        
     def _make_code(self):
         return "".join(
             random.choices(string.ascii_uppercase + string.digits, k=5)
@@ -144,31 +156,44 @@ class Room:
             # 시간 초과 시 자동 패스
             if self.game.players[self.game.turn] == current:
                 self.game.next_turn()
+ 
 
-    # =========================
-    # 명령 처리
-    # =========================
+    # =========================================================
+    # ✅ [서버 권위 구조] 명령 처리 및 클라이언트 검증 로직
+    # =========================================================
+    
     def handle_command(self, player, msg):
-        if not self.running:
+        if not self.running or not self.game:
             return
 
-        # 내 턴 아니면 무시
-        if self.game.players[self.game.turn] != player:
-            return
-
-        cmd = msg.get("cmd", "")
-
-        if cmd.startswith("PLAY"):
-            try:
-                _, idx = cmd.split()
-                idx = int(idx)
-                if self.game.play_card(player, idx):
-                    self.game.next_turn()
-            except:
+        with self.lock:
+            # 1. 턴 검증: 현재 턴인 플레이어의 명령만 허용 (타인 턴 조작 차단)
+            if self.game.players[self.game.turn] != player:
                 return
 
-        elif cmd.upper() == "PASS":
-            self.game.next_turn()
+            cmd = msg.get("cmd", "")
 
-        elif cmd.upper() == "UNO":
-            player.said_uno = True
+            if cmd.startswith("PLAY"):
+                try:
+                    parts = cmd.split()
+                    if len(parts) != 2:
+                        return
+                    idx = int(parts[1])
+
+                    # 2. 카드 소유 검사: 요청 인덱스가 실제 플레이어 손패 범위 내에 있는지 검사
+                    if 0 <= idx < len(player.hand):
+                        # 3. 규칙 검사: 해당 카드가 낼 수 있는 카드인지 GameState에서 판별 후 제출
+                        if self.game.play_card(player, idx):
+                            self.game.next_turn()
+                    else:
+                        # 손패 범위를 벗어난 인덱스 요청 (변조된 패킷 무시)
+                        print(f"[보호] {player.name}의 유효하지 않은 카드 인덱스 요청: {idx}")
+
+                except (ValueError, IndexError):
+                    return
+
+            elif cmd.upper() == "PASS":
+                self.game.next_turn()
+
+            elif cmd.upper() == "UNO":
+                player.said_uno = True
