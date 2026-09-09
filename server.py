@@ -145,6 +145,11 @@ def client_thread(conn, addr):
         if len(room.players) == 1:
             threading.Thread(target=room.game_loop, daemon=True).start()
 
+        if len(room.players) >= room.max_players:
+            conn.sendall(encode({"type": "ERROR", "msg", "방 정원이 초과 되었습니다."}))
+            continue
+                                     
+
         # ---- 명령 처리 ----
         while True:
             msg = recv_msg(conn, buffer)
@@ -155,6 +160,9 @@ def client_thread(conn, addr):
     finally:
         if room and player:
             room.remove_player(player)
+            with rooms_lock:
+                if len(room.players) == 0 and room.code in room:
+                    del rooms[room.code]
         conn.close()
 
 
