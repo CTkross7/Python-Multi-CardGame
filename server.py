@@ -139,7 +139,7 @@ def client_thread(conn, addr):
                 if room.running:
                     conn.sendall(encode({"type": "ERROR", "msg": "이미 게임이 진행 중입니다."}))
                     continue
-                
+
                 # [추가] 방 정원 초과 검사
                 if len(room.players) >= room.max_players:
                     conn.sendall(encode({"type": "ERROR", "msg": "방 정원이 가득 찼습니다."}))
@@ -227,86 +227,6 @@ def main():
             ).start()
         except OSError:
             break
-
-
-if __name__ == "__main__":
-    main()
-        pid = len(room.players)
-        pname = f"Player{pid}"
-        player = Player(pid, pname, conn)
-        room.add_player(player)
-
-        if len(room.players) == 1:
-            threading.Thread(target=room.game_loop, daemon=True).start()
-
-        if len(room.players) >= room.max_players:
-            conn.sendall(encode({"type": "ERROR", "msg", "방 정원이 초과 되었습니다."}))
-            continue
-                                     
-
-        # ---- 명령 처리 ----
-        while True:
-            msg = recv_msg(conn, buffer)
-            if not msg:
-                break
-            room.handle_command(player, msg)
-
-    finally:
-        if room and player:
-            room.remove_player(player)
-            with rooms_lock:
-                if len(room.players) == 0 and room.code in room:
-                    del rooms[room.code]
-        conn.close()
-
-
-# =========================
-# 방 상태 모니터 (변경 시만 출력)
-# =========================
-def monitor_rooms():
-    global last_snapshot
-
-    while True:
-        time.sleep(1)
-
-        with rooms_lock:
-            lines = [f"서버 IP: {SERVER_IP}:{PORT}", "-" * 40]
-            for c, r in rooms.items():
-                lines.append(
-                    f"[{c}] {r.name} "
-                    f"{'🔒' if r.password else ''} "
-                    f"{len(r.players)}/{r.max_players} "
-                    f"{'진행중' if r.running else '대기중'}"
-                )
-
-        snapshot = "\n".join(lines)
-
-        if snapshot != last_snapshot:
-            os.system("cls" if os.name == "nt" else "clear")
-            print(snapshot)
-            last_snapshot = snapshot
-
-
-# =========================
-# 메인
-# =========================
-def main():
-    server = socket.socket()
-    server.bind((HOST, PORT))
-    server.listen()
-
-    print(f"UNO SERVER STARTED : {SERVER_IP}:{PORT}")
-
-    threading.Thread(target=discovery_server, daemon=True).start()
-    threading.Thread(target=monitor_rooms, daemon=True).start()
-
-    while True:
-        conn, addr = server.accept()
-        threading.Thread(
-            target=client_thread,
-            args=(conn, addr),
-            daemon=True
-        ).start()
 
 
 if __name__ == "__main__":
